@@ -4,10 +4,10 @@ Author: PointNeXt
 import numpy as np
 import torch
 from easydict import EasyDict as edict
-from openpoints.utils import registry
+from openpoints.utils.registry import DATASETS
 from openpoints.transforms import build_transforms_from_cfg
 
-DATASETS = registry.Registry('dataset')
+
 
 
 def concat_collate_fn(datas):

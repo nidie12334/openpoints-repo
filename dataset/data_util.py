@@ -176,10 +176,18 @@ def crop_pc(coord, feat, label, split='train',
 
 def get_features_by_keys(data, keys='pos,x'):
     key_list = keys.split(',')
+    # —— 合并单个或多个特征 ——  
     if len(key_list) == 1:
-        return data[keys].transpose(1,2).contiguous()
+        feat = data[key_list[0]]                             # ← 修改：先拿到 Tensor
     else:
-        return torch.cat([data[key] for key in keys.split(',')], -1).transpose(1,2).contiguous()
+        feat = torch.cat([data[k] for k in key_list], dim=-1)  # ← 修改：拼接多个特征
+  
+    # —— 支持 2D [N,C] 与 3D [B,N,C] ——  
+    if feat.dim() == 2:
+        # [N, C] -> [C, N] -> [1, C, N]
+        return feat.transpose(0, 1).unsqueeze(0).contiguous()  # ← 新增：兼容单帧
+    # [B, N, C] -> [B, C, N]
+    return feat.transpose(1, 2).contiguous()                  # ← 新增：兼容批量
 
 
 def get_class_weights(num_per_class, normalize=False):
@@ -190,3 +198,50 @@ def get_class_weights(num_per_class, normalize=False):
         ce_label_weight = (ce_label_weight *
                            len(ce_label_weight)) / ce_label_weight.sum()
     return torch.from_numpy(ce_label_weight.astype(np.float32))
+
+# —— 新增：按 batch 中最大点数 padding，然后堆成 [B, N_max, …] ——  
+def pad_collate_fn(batch):
+    """
+    Batch 列表中的每个样本是 dict，包含
+      'pos': Tensor [Ni, 3]
+      'x'  : Tensor [Ni, C]
+      'y'  : Tensor [Ni]
+    本函数将它们 padding 到同一个点数 N = max(Ni)，
+    并返回：
+      pos: Tensor [B, N, 3]
+      x  : Tensor [B, N, C]
+      y  : Tensor [B, N]  （用 ignore_label 填充）
+      mask: Tensor [B, N] （有效点标记）
+    """
+    import torch
+    # 1) 计算批次大小和最大点数
+    B = len(batch)
+    Ns = [d['pos'].shape[0] for d in batch]
+    N_max = max(Ns)
+
+    # 2) 准备空 Tensor
+    pos_dim = batch[0]['pos'].shape[1]
+    feat_dim = batch[0]['x'].shape[1]
+    ignore = getattr(batch[0], 'ignore_label', -1)
+    # batch 维度放最前面
+    pos_tensor = torch.zeros((B, N_max, pos_dim), dtype=batch[0]['pos'].dtype)
+    x_tensor   = torch.zeros((B, N_max, feat_dim), dtype=batch[0]['x'].dtype)
+    y_tensor   = torch.full((B, N_max), fill_value=ignore, dtype=batch[0]['y'].dtype)
+    mask       = torch.zeros((B, N_max), dtype=torch.bool)
+
+    # 3) 填充
+    for i, d in enumerate(batch):
+        n = d['pos'].shape[0]
+        pos_tensor[i, :n] = d['pos']
+        x_tensor[i,   :n] = d['x']
+        y_tensor[i,   :n] = d['y']
+        mask[i,       :n] = 1
+
+    return {
+        'pos': pos_tensor,
+        'x'  : x_tensor,
+        'y'  : y_tensor,
+        'mask': mask,
+    }
+import openpoints.dataset.build as _build
+_build.pad_collate_fn = pad_collate_fn
