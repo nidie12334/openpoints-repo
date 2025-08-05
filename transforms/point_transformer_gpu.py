@@ -29,6 +29,11 @@ class PointCloudToTensor(object):
             data['normals'] = torch.from_numpy(normals).float().transpose(0, 1)
         if colors is not None:
             data['colors'] = torch.from_numpy(colors).transpose(0, 1).float()
+        if 'curvature' in data:
+            # 把 curvature 从 (N,) 或 (N,1) 的 numpy 变成 (1,N) 的 Tensor
+            data['curvature'] = torch.from_numpy(
+                np.array(data['curvature'], dtype=np.float32)
+            ).unsqueeze(0)
         return data
 
 
