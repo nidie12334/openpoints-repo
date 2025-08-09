@@ -29,12 +29,12 @@ class OpenTrench3D(Dataset):
 
     def __getitem__(self, idx):
         ply_path = self.files[idx]
-        print(f">>> LOADING PLY: {ply_path}")
+        
 
         # 1) 读取所有顶点属性字段，打印字段名以便调试
         ply = PlyData.read(ply_path)
         v   = next(e.data for e in ply.elements if e.name == 'vertex')
-        print(f">>> DEBUG fields = {v.dtype.names}")
+        
 
         # 2) 提取坐标
         pts = np.stack([v['x'], v['y'], v['z']], axis=-1).astype(np.float32)  # (N,3)
