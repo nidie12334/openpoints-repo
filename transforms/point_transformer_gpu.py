@@ -13,8 +13,7 @@ from .transforms_factory import DataTransforms
 # import scipy.ndimage
 # import scipy.interpolate
 from scipy.linalg import expm, norm
-
-
+'''
 @DataTransforms.register_module()
 class PointCloudToTensor(object):
     def __init__(self, **kwargs):
@@ -34,6 +33,62 @@ class PointCloudToTensor(object):
             data['curvature'] = torch.from_numpy(
                 np.array(data['curvature'], dtype=np.float32)
             ).unsqueeze(0)
+        return data
+'''
+@DataTransforms.register_module()
+class PointCloudToTensor(object):
+    def __init__(self, **kwargs):
+        pass
+
+    def __call__(self, data):
+        # pos 兼容 NumPy / Tensor
+        pts = data['pos']
+        if isinstance(pts, torch.Tensor):
+            data['pos'] = pts.float()
+        else:
+            data['pos'] = torch.from_numpy(pts).float()
+
+        if 'x' in data:
+            x = data['x']
+            if isinstance(x, torch.Tensor):
+                data['x'] = x.float()
+            else:
+                data['x'] = torch.from_numpy(x).float()
+        # normals
+        if 'normals' in data:
+            normals = data['normals']
+            if isinstance(normals, torch.Tensor):
+                n = normals.float()
+                if n.dim() == 2 and n.shape[-1] == 3:
+                    n = n.transpose(0, 1)
+                data['normals'] = n.contiguous()
+            else:
+                data['normals'] = torch.from_numpy(normals).float().transpose(0, 1).contiguous()
+
+        # colors
+        if 'colors' in data:
+            colors = data['colors']
+            if isinstance(colors, torch.Tensor):
+                c = colors.float()
+                if c.dim() == 2 and c.shape[-1] == 3:
+                    c = c.transpose(0, 1)
+                data['colors'] = c.contiguous()
+            else:
+                data['colors'] = torch.from_numpy(colors).transpose(0, 1).float().contiguous()
+
+        # curvature
+        if 'curvature' in data:
+            curv = data['curvature']
+            if isinstance(curv, torch.Tensor):
+                c = curv.float()
+            else:
+                c = torch.from_numpy(np.asarray(curv, dtype=np.float32))
+            if c.dim() == 1:
+                c = c.unsqueeze(0)
+            elif c.dim() == 2 and c.shape[0] != 1 and c.shape[1] == 1:
+                c = c.transpose(0, 1)
+            data['curvature'] = c.contiguous()
+
         return data
 
 
